@@ -1,0 +1,7 @@
+A competitive tile-sliding puzzle battle game, based on Gabriele Cirulli's 2048 and taking inspiration from Puyo Puyo Tetris and other competitive puzzle games. Developed in Unity. 256 is 100% free software.
+Note: This project uses the Git LFS extension: https://git-lfs.github.com/
+We're on Trello: https://trello.com/b/GFHylK0I/256
+Installing:
+Go grab the latest build for your platform from Releases, or build your own! 256 is currently developed using Unity 5.5.2f1 Personal Edition.
+How to Play:
+When same-numbered tiles collide, they merge! Reach 256 to win, but don't run out of moves! Big matches and long combos send garbage to your opponent's board, clogging it with negative tiles that won't merge and can only be removed with the matching positive number. Neutralize incoming garbage with your own combos, or block it with big tiles.
