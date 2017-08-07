@@ -23,7 +23,7 @@ public class Tile : MonoBehaviour
 				if (g)
 					g.setAt(position, null);
 				slideStart = Time.time;
-				slideEnd = slideStart + (2.0f / 60) * (value - lastPosition).magnitude;
+				slideEnd = (slideStart + (2.0f / 60) * (value - lastPosition).magnitude) / g.comboSpeedup();
 				sliding = true;
 				if (!animator)
 					animator = GetComponent<Animator>();

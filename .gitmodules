@@ -1,0 +1,4 @@
+[submodule "Assets/Scripts/Unity-Int-Vectors"]
+	path = Assets/Scripts/Unity-Int-Vectors
+	url = https://github.com/LinusVanElswijk/Unity-Int-Vectors.git
+	branch = master

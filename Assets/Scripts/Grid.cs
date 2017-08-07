@@ -28,6 +28,7 @@ public class Grid : MonoBehaviour {
 	Tile[,] contents;
 	GarbageTile[,] garbage;
 	int combo;
+    int tilesReceived;
 	float comboTimer, lagTimer, tileTimer;
 	Vector2i moveBuffer;
 	public bool hasWon, hasLost;
@@ -91,6 +92,11 @@ public class Grid : MonoBehaviour {
 				initGarbagePositionRNG(Random.Range(int.MinValue, int.MaxValue));
 				});
 	}
+
+    public float comboSpeedup()
+    {
+        return 1.0f + ((Mathf.Pow(Mathf.Atan(combo / 2.0f) / (Mathf.PI / 2), 2)) * (comboSpeedupMaxMultiplier - 1));
+    }
 
 	public Tile at(Vector2i position)
 	{
@@ -327,7 +333,7 @@ public class Grid : MonoBehaviour {
 			{
 				combo++;
 				comboBroken = false;
-				//Debug.Log("Combo: " + combo);
+				Debug.Log("Combo: " + combo + "; Speedup: " + comboSpeedup() + "; Speedup Max Mult: " + comboSpeedupMaxMultiplier);
 				timesToIntensify += Mathf.FloorToInt(Mathf.Log(t.val, 2));
 				if (combo >= 3)
 					garbageToSend += Mathf.FloorToInt(Mathf.Log(combo - 1, 2));
@@ -337,7 +343,7 @@ public class Grid : MonoBehaviour {
 				   matchesMade++;
 				   garbageToSend += t.val / 16;
 				   */
-				if (t.val == 256)
+				if (t.val == 512)
 				{
 					hasWon = true;
 					winLossCode = WinLossCode.MADE256;
@@ -424,6 +430,7 @@ public class Grid : MonoBehaviour {
 		for (int i = 0; i < startTiles; i++)
 			addTile();
 		combo = 0;
+        tilesReceived = 0;
 		hasWon = false;
 		hasLost = false;
 		winLossCode = WinLossCode.NONE;
@@ -474,7 +481,7 @@ public class Grid : MonoBehaviour {
 		float increment = Time.deltaTime;
 		if (doComboSpeedup)
 		{
-			// Multiply increment by current speedup factor, whatever that is.
+            increment *= comboSpeedup();
 		}
 		if (comboTimerLength != 0)
 		{
@@ -492,6 +499,8 @@ public class Grid : MonoBehaviour {
 			if (tileTimer > tileTimerLength)
 			{
 				addTile();
+                tilesReceived++;
+                Debug.Log("Tiles Received for " + this.name + ": " + tilesReceived);
 				tileTimer -= tileTimerLength;
 			}
 			tileMeter.value = tileTimer / tileTimerLength;
