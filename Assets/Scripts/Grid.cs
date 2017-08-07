@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using UnityEngine;
 using UnityEngine.UI;
 using Codes.Linus.IntVectors;
@@ -21,14 +22,14 @@ public class Grid : MonoBehaviour {
 
 	public Slider comboMeter, tileMeter;
 	public Text comboText;
-
+	
 	public Grid opponent;
 	public Tile tilePrefab;
 	public GarbageTile garbagePrefab;
 	Tile[,] contents;
 	GarbageTile[,] garbage;
 	int combo;
-    int tilesReceived;
+	int tilesReceived;
 	float comboTimer, lagTimer, tileTimer;
 	Vector2i moveBuffer;
 	public bool hasWon, hasLost;
@@ -93,10 +94,10 @@ public class Grid : MonoBehaviour {
 				});
 	}
 
-    public float comboSpeedup()
-    {
-        return 1.0f + ((Mathf.Pow(Mathf.Atan(combo / 2.0f) / (Mathf.PI / 2), 2)) * (comboSpeedupMaxMultiplier - 1));
-    }
+	public float comboSpeedup()
+	{
+		return 1.0f + ((Mathf.Pow(Mathf.Atan(combo / 2.0f) / (Mathf.PI / 2), 2)) * (comboSpeedupMaxMultiplier - 1));
+	}
 
 	public Tile at(Vector2i position)
 	{
@@ -165,15 +166,15 @@ public class Grid : MonoBehaviour {
 				dropGarbage();
 	}
 	/* no longer a thing
-	public bool checkGarbageLoss()
-	{
-		if (!enableGarbage) return false;
-		foreach (GarbageTile t in garbage)
-			if (t == null)
-				return false;
-		return true;
-	}
-	*/
+	   public bool checkGarbageLoss()
+	   {
+	   if (!enableGarbage) return false;
+	   foreach (GarbageTile t in garbage)
+	   if (t == null)
+	   return false;
+	   return true;
+	   }
+	   */
 	public bool checkLoss()
 	{
 		foreach (Tile t in contents)
@@ -211,6 +212,15 @@ public class Grid : MonoBehaviour {
 				addTile(Random.value > 0.9 ? 4 : 2);
 				});
 	}
+	public void addGarbage(Vector2i pos, int val) {
+		GarbageTile t = Instantiate(garbagePrefab.gameObject).GetComponent<GarbageTile>();
+		t.g = this;
+		t.val = val;
+		t.pos = pos;
+	}
+	public void addGarbage(int x, int y, int val) {
+		addGarbage(new Vector2i(x, y), val);
+	}
 	public void addGarbage(int val)
 	{
 		doWithRNG(ref garbagePositionRandomState, () => {
@@ -218,10 +228,7 @@ public class Grid : MonoBehaviour {
 				if (spaces.Count == 0)
 				return; // No room for more garbage
 				Vector2i pos = spaces[Random.Range(0, spaces.Count)];
-				GarbageTile t = Instantiate(garbagePrefab.gameObject).GetComponent<GarbageTile>();
-				t.g = this;
-				t.val = val;
-				t.pos = pos;
+				addGarbage(pos, val);
 				});
 	}
 	public void intensifyGarbage()
@@ -257,6 +264,72 @@ public class Grid : MonoBehaviour {
 		for (int i = 0; i < tiles; i++)
 			addGarbage(-2);
 	}
+	struct ExplosionPositionData {
+		public int x, y;
+		public float multiplier;
+		public ExplosionPositionData(int x, int y, float multiplier) {
+			this.x = x;
+			this.y = y;
+			this.multiplier = multiplier;
+		}
+	}
+	static ExplosionPositionData epd(int x, int y, float multiplier) {
+		return new ExplosionPositionData(x, y, multiplier);
+	}
+	static readonly IList<ExplosionPositionData>  explosionPattern = new ReadOnlyCollection<ExplosionPositionData>
+	( new []{
+		epd(-1, -1, 1.0f/16), epd( 0, -1, 1.0f/ 8), epd( 1, -1, 1.0f/16),
+		epd(-1,  0, 1.0f/ 8), epd( 0,  0, 1.0f/ 4), epd( 1,  0, 1.0f/ 8),
+		epd(-1,  1, 1.0f/16), epd( 0,  1, 1.0f/ 8), epd( 1,  1, 1.0f/16),
+	});
+	public void resolveExplosions() {
+
+		float[,] garbageValues = new float[w, h];
+		for (int x = 0; x < w; x++) {
+			for (int y = 0; y < h; y++) {
+				Tile t = at(x, y);
+				if (!t) continue;
+				if (!t.mergedThisMove) continue;
+				foreach (ExplosionPositionData e in explosionPattern) {
+					int px = e.x + x;
+					int py = e.y + y;
+					if (px < 0 || px >= w || py < 0 || py >= h) continue;
+					garbageValues[px, py] += t.val * e.multiplier;
+				}
+			}
+		}
+		for (int x = 0; x < w; x++) {
+			for (int y = 0; y < h; y++) {
+				if (garbageAt(x, y))
+					garbageValues[x, y] += garbageAt(x, y).val;
+				if (opponent.garbageAt(x, y))
+					garbageValues[x, y] -= opponent.garbageAt(x, y).val;
+				//TODO @Optimization Find faster algorithm
+				float v = garbageValues[x, y];
+				if (v >= 0) {
+					if (garbageAt(x, y)) Destroy(garbageAt(x, y));
+					setGarbageAt(x, y, null);
+					if (v >= 2) {
+						int g;
+						for (g = 2; g * 2 <= v; g *= 2) { if (g == 8192) break; }
+						if (opponent.garbageAt(x, y)) opponent.garbageAt(x, y).val = -g;
+						else opponent.addGarbage(x, y, -g);
+					}
+				}
+				if (v < 2) {
+					if (opponent.garbageAt(x, y)) Destroy(opponent.garbageAt(x, y));
+					opponent.setGarbageAt(x, y, null);
+					if (v < 0) {
+						int g;
+						for (g = -2; g > v; g *= 2) { if (g == -8192) break; }
+						if (garbageAt(x, y)) garbageAt(x, y).val = g;
+						else addGarbage(x, y, g);
+					}
+				}
+			}
+		}
+	}
+
 	public void dropGarbage()
 	{
 		foreach (GarbageTile t in garbage)
@@ -276,12 +349,12 @@ public class Grid : MonoBehaviour {
 		if (!allowNullMove && direction == Vector2i.zero)
 		{
 			/*
-			if (checkGarbageLoss())
-			{
-				hasLost = true;
-				winLossCode = WinLossCode.GARBAGEFULL;
-			}
-			*/
+			   if (checkGarbageLoss())
+			   {
+			   hasLost = true;
+			   winLossCode = WinLossCode.GARBAGEFULL;
+			   }
+			   */
 			breakCombo();
 			if (checkLoss())
 			{
@@ -321,7 +394,7 @@ public class Grid : MonoBehaviour {
 		else // Null move
 			tileMoved = true; // Behave as if a move was made
 		bool comboBroken = true;
-		int garbageToSend = 0;
+		//int garbageToSend = 0;
 		int timesToIntensify = 0;
 		foreach (Tile t in traversal)
 		{
@@ -333,10 +406,14 @@ public class Grid : MonoBehaviour {
 			{
 				combo++;
 				comboBroken = false;
-				Debug.Log("Combo: " + combo + "; Speedup: " + comboSpeedup() + "; Speedup Max Mult: " + comboSpeedupMaxMultiplier);
+				if (combo % 4 == 0)
+					timesToIntensify++;
+				// Debug.Log("Combo: " + combo + "; Speedup: " + comboSpeedup() + "; Speedup Max Mult: " + comboSpeedupMaxMultiplier);
+				/* old garbage code
 				timesToIntensify += Mathf.FloorToInt(Mathf.Log(t.val, 2));
 				if (combo >= 3)
 					garbageToSend += Mathf.FloorToInt(Mathf.Log(combo - 1, 2));
+				*/
 				/*
 				   comboBroken = false;
 				   combo = true;
@@ -350,9 +427,16 @@ public class Grid : MonoBehaviour {
 				}
 			}
 		}
-		timesToIntensify /= 4;
-		if (enableGarbage)
+		//timesToIntensify /= 4;
+		if (enableGarbage && !comboBroken)
 		{
+			for (int i = 0; i < timesToIntensify; i++)
+				neutralizeGarbage();
+			resolveExplosions();
+			for (int i = 0; i < timesToIntensify; i++)
+				opponent.intensifyGarbage();
+
+			/*
 			if (hasGarbage())
 			{
 				for (int i = 0; i < garbageToSend + timesToIntensify; i++)
@@ -362,6 +446,7 @@ public class Grid : MonoBehaviour {
 			{
 				opponent.sendGarbage(garbageToSend, timesToIntensify);
 			}
+			*/
 			/*
 			   if (hasGarbage())
 			   {
@@ -381,12 +466,12 @@ public class Grid : MonoBehaviour {
 		if (comboBroken)
 		{
 			/*
-			if (checkGarbageLoss())
-			{
-				hasLost = true;
-				winLossCode = WinLossCode.GARBAGEFULL;
-			}
-			*/
+			   if (checkGarbageLoss())
+			   {
+			   hasLost = true;
+			   winLossCode = WinLossCode.GARBAGEFULL;
+			   }
+			   */
 			breakCombo();
 		}
 		if (addTileAfterMove)
@@ -430,7 +515,7 @@ public class Grid : MonoBehaviour {
 		for (int i = 0; i < startTiles; i++)
 			addTile();
 		combo = 0;
-        tilesReceived = 0;
+		tilesReceived = 0;
 		hasWon = false;
 		hasLost = false;
 		winLossCode = WinLossCode.NONE;
@@ -481,7 +566,7 @@ public class Grid : MonoBehaviour {
 		float increment = Time.deltaTime;
 		if (doComboSpeedup)
 		{
-            increment *= comboSpeedup();
+			increment *= comboSpeedup();
 		}
 		if (comboTimerLength != 0)
 		{
@@ -499,8 +584,8 @@ public class Grid : MonoBehaviour {
 			if (tileTimer > tileTimerLength)
 			{
 				addTile();
-                tilesReceived++;
-                Debug.Log("Tiles Received for " + this.name + ": " + tilesReceived);
+				tilesReceived++;
+				//Debug.Log("Tiles Received for " + this.name + ": " + tilesReceived);
 				tileTimer -= tileTimerLength;
 			}
 			tileMeter.value = tileTimer / tileTimerLength;
@@ -513,10 +598,10 @@ public class Grid : MonoBehaviour {
 				comboText.text = "";
 		}
 		/*
-	   if (Input.anyKeyDown)
-	   {
-	   debugPrintGrid();
-	   }
-	   */
+		   if (Input.anyKeyDown)
+		   {
+		   debugPrintGrid();
+		   }
+		   */
 	}
 }
