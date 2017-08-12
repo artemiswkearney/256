@@ -97,6 +97,15 @@ public class Tile : MonoBehaviour
 			move(direction, true);
 			return true;
 		}
+		if (!isNegative && g.at(next).isNegative && g.at(next).val >= (val / -4)) {
+			Tile other = g.at(next);
+			pos = next; // Sets our position, but removes other from grid
+			other.pos = next - direction; // Moves other into our old position, but removes us from grid
+			g.setAt(pos, this); // Adds us back to grid
+			move(direction, false); // Pretend we're not recursing for now until there's an animation for this
+			other.move(direction); // In case we merge or negate; don't want to leave empty space.
+			return true;
+		}
 		if (g.at(next).val == val && !g.at(next).mergedThisMove && !isNegative)
 		{
 			//Destroy(g.at(next).gameObject);
